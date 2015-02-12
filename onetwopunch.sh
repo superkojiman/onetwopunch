@@ -1,91 +1,109 @@
 #!/bin/bash 
 
-if [[ ! $(id -u) == 0 ]]; then
-	echo "This script must be run as root!"
-	exit 1
-fi
-
-NMAP_OPT="-A"
-IFACE="wlp0s20u1"
-MYDIR="$(dirname $0)"
-TARGETS=""
-PROTO="tcp"
-
 function usage {
-	echo "Usage: sudo $0 <interface> <targets> [proto] [nmap_args]"
-	echo "	interface	Interface to use (e.g. eth0, wlp3s0, tap0 ...)"
-	echo "	targets		File with line-delimited targets to scan"
-	echo "	proto		Protocol to scan (tcp, udp, or all): default tcp"
-	echo "	nmap_args	Additional arguments to pass to nmap: default -A"
-
-	exit 1
+    echo "Usage: $0 -t targets.txt [-p tcp/udp/all] [-i interface] [-n nmap-options] [-h]"
+    echo "       -h: Help"
+    echo "       -t: File containing ip addresses to scan. This option is required."
+    echo "       -p: Protocol. Defaults to tcp"
+    echo "       -i: Network interface. Defaults to eth0"
+    echo "       -n: NMAP options (-A, -O, etc). Defaults to no options."
 }
 
-# Set arguments
-if [[ $# < 2 ]]; then usage; fi
-IFACE=$1
-TARGETS=$2
-if [[ -n $3 ]]; then PROTO=$3; fi
-if [[ -n $4 ]]; then NMAP_OPT=$4; fi
 
-if [[ ! $PROTO == "tcp" && ! $PROTO == "udp" && ! $PROTO == "all" ]]; then
-	echo "[!] Only valid protocol options are tcp, udp, or all"
-	exit 1
+if [[ ! $(id -u) == 0 ]]; then
+    echo "[!] This script must be run as root"
+    exit 1
 fi
 
-echo "[+] Interface set to ${IFACE}"
-echo "[+] Target list set to ${TARGETS}"
-echo "[+] Protocol set to ${PROTO}"
-echo "[+] NMAP arguments set to ${NMAP_OPT}"
+if [[ -z $1 ]]; then
+    usage
+    exit 0
+fi
+
+# commonly used default options
+proto="tcp"
+iface="eth0"
+nmap_opt=""
+targets=""
+
+while getopts "p:i:t:n:h" OPT; do
+    case $OPT in
+        p) proto=${OPTARG};;
+        i) iface=${OPTARG};;
+        t) targets=${OPTARG};;
+        n) nmap_opt=${OPTARG};;
+        h) usage; exit 0;;
+        *) usage; exit 0;;
+    esac
+done
+
+if [[ -z $targets ]]; then
+    echo "[!] No target file provided"
+    usage
+    exit 1
+fi
+
+if [[ ${proto} != "tcp" && ${proto} != "udp" && ${proto} != "all" ]]; then
+    echo "[!] Unsupported protocol"
+    usage
+    exit 1
+fi
+
+echo "[+] Protocol : ${proto}"
+echo "[+] Interface: ${iface}"
+echo "[+] Nmap opts: ${nmap_opt}"
+echo "[+] Targets  : ${targets}"
+
 
 # backup any old scans before we start a new one
-mkdir -p "${MYDIR}/backup/"
-if [[ -d "${MYDIR}/ndir/" ]]; then 
-	mv "${MYDIR}/ndir/" "${MYDIR}/backup/ndir-$(date "+%Y%m%d-%H%M%S")/"
+mydir=$(dirname $0)
+mkdir -p "${mydir}/backup/"
+if [[ -d "${mydir}/ndir/" ]]; then 
+    mv "${mydir}/ndir/" "${mydir}/backup/ndir-$(date "+%Y%m%d-%H%M%S")/"
 fi
-if [[ -d "${MYDIR}/udir/" ]]; then 
-	mv "${MYDIR}/udir/" "${MYDIR}/backup/udir-$(date "+%Y%m%d-%H%M%S")/"
+if [[ -d "${mydir}/udir/" ]]; then 
+    mv "${mydir}/udir/" "${mydir}/backup/udir-$(date "+%Y%m%d-%H%M%S")/"
 fi 
 
-rm -rf "${MYDIR}/ndir/"
-mkdir -p "${MYDIR}/ndir/"
-rm -rf "${MYDIR}/udir/"
-mkdir -p "${MYDIR}/udir/"
+rm -rf "${mydir}/ndir/"
+mkdir -p "${mydir}/ndir/"
+rm -rf "${mydir}/udir/"
+mkdir -p "${mydir}/udir/"
 
-while read IP; do
-	echo "[+] Scanning $IP for $PROTO ports..."
+while read ip; do
+    echo "[+] Scanning $ip for $proto ports..."
 
-	# unicornscan identifies all open TCP ports
-	if [[ $PROTO == "tcp" || $PROTO == "all" ]]; then 
-		echo "[+] Obtaining all open TCP ports using unicornscan..."
-		echo "[+] unicornscan -i ${IFACE} -mT ${IP}:a -l ${MYDIR}/udir/${IP}-tcp.txt"
-		unicornscan -i ${IFACE} -mT ${IP}:a -l ${MYDIR}/udir/${IP}-tcp.txt
-		PORTS=$(cat "${MYDIR}/udir/${IP}-tcp.txt" | grep open | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',')
-		if [[ ! -z $PORTS ]]; then 
-			# nmap follows up
-			echo "[+] Ports for nmap to scan: $PORTS"
-			echo "[+] nmap -e ${IFACE} ${NMAP_OPT} -oX ${MYDIR}/ndir/${IP}-tcp.xml -oG ${MYDIR}/ndir/${IP}-tcp.grep -p ${PORTS} ${IP}"
-			nmap -e ${IFACE} ${NMAP_OPT} -oX ${MYDIR}/ndir/${IP}-tcp.xml -oG ${MYDIR}/ndir/${IP}-tcp.grep -p ${PORTS} ${IP}
-		else
-			echo "[!] No TCP ports found"
-		fi
-	fi
+    # unicornscan identifies all open TCP ports
+    if [[ $proto == "tcp" || $proto == "all" ]]; then 
+        echo "[+] Obtaining all open TCP ports using unicornscan..."
+        echo "[+] unicornscan -i ${iface} -mT ${ip}:a -l ${mydir}/udir/${ip}-tcp.txt"
+        unicornscan -i ${iface} -mT ${ip}:a -l ${mydir}/udir/${ip}-tcp.txt
+        ports=$(cat "${mydir}/udir/${ip}-tcp.txt" | grep open | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',')
+        if [[ ! -z $ports ]]; then 
+            # nmap follows up
+            echo "[+] Ports for nmap to scan: $ports"
+            echo "[+] nmap -e ${iface} ${nmap_opt} -oX ${mydir}/ndir/${ip}-tcp.xml -oG ${mydir}/ndir/${ip}-tcp.grep -p ${ports} ${ip}"
+            nmap -e ${iface} ${nmap_opt} -oX ${mydir}/ndir/${ip}-tcp.xml -oG ${mydir}/ndir/${ip}-tcp.grep -p ${ports} ${ip}
+        else
+            echo "[!] No TCP ports found"
+        fi
+    fi
 
-	# unicornscan identifies all open UDP ports
-	if [[ $PROTO == "udp" || $PROTO == "all" ]]; then  
-		echo "[+] Obtaining all open UDP ports using unicornscan..."
-		echo "[+] unicornscan -i ${IFACE} -mU ${IP}:a -l ${MYDIR}/udir/${IP}-udp.txt"
-		unicornscan -i ${IFACE} -mU ${IP}:a -l ${MYDIR}/udir/${IP}-udp.txt
-		ports=$(cat "${MYDIR}/udir/${IP}-udp.txt" | grep open | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',')
-		if [[ ! -z $PORTS ]]; then
-			# nmap follows up
-			echo "[+] nmap -e ${IFACE} -sU -oX ${MYDIR}/ndir/${IP}-udp.xml -oG ${MYDIR}/ndir/${IP}-udp.grep -p ${PORTS} ${IP}"
-			nmap -e ${IFACE} -sU -oX ${MYDIR}/ndir/${IP}-udp.xml -oG ${MYDIR}/ndir/${IP}-udp.grep -p ${PORTS} ${IP}
-		else
-			echo "[!] No UDP ports found"
-		fi
-	fi
-done < ${TARGETS}
+    # unicornscan identifies all open UDP ports
+    if [[ $proto == "udp" || $proto == "all" ]]; then  
+        echo "[+] Obtaining all open UDP ports using unicornscan..."
+        echo "[+] unicornscan -i ${iface} -mU ${ip}:a -l ${mydir}/udir/${ip}-udp.txt"
+        unicornscan -i ${iface} -mU ${ip}:a -l ${mydir}/udir/${ip}-udp.txt
+        ports=$(cat "${mydir}/udir/${ip}-udp.txt" | grep open | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',')
+        if [[ ! -z $ports ]]; then
+            # nmap follows up
+            echo "[+] nmap -e ${iface} ${nmap_opt} -sU -oX ${mydir}/ndir/${ip}-udp.xml -oG ${mydir}/ndir/${ip}-udp.grep -p ${ports} ${ip}"
+            nmap -e ${iface} ${nmap_opt} -sU -oX ${mydir}/ndir/${ip}-udp.xml -oG ${mydir}/ndir/${ip}-udp.grep -p ${ports} ${ip}
+        else
+            echo "[!] No UDP ports found"
+        fi
+    fi
+done < ${targets}
 
 echo "[+] Scans completed"
 
