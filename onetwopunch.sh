@@ -1,5 +1,4 @@
 #!/bin/bash 
-
 # The MIT License (MIT)
 #
 # Copyright (c) 2012-2015 Harold Rodriguez
