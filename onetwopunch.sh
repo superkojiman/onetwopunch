@@ -23,6 +23,7 @@ fi
 if [[ -z $(which unicornscan) ]]; then
     echo "[!] Unable to find unicornscan. Install it and make sure it's in your PATH environment"
     exit 1
+fi
 
 if [[ -z $1 ]]; then
     usage
