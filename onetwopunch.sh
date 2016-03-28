@@ -1,5 +1,23 @@
 #!/bin/bash 
 
+# Colors
+ESC="\e["
+RESET=$ESC"39m"
+RED=$ESC"31m"
+GREEN=$ESC"32m"
+BLUE=$ESC"34m"
+
+function banner {
+echo "                             _                                          _       _ "
+echo "  ___  _ __   ___           | |___      _____    _ __  _   _ _ __   ___| |__   / \\"
+echo " / _ \| '_ \ / _ \          | __\ \ /\ / / _ \  | '_ \| | | | '_ \ / __| '_ \ /  /"
+echo "| (_) | | | |  __/ ᕦ(ò_óˇ)ᕤ | |_ \ V  V / (_) | | |_) | |_| | | | | (__| | | /\_/ "
+echo " \___/|_| |_|\___|           \__| \_/\_/ \___/  | .__/ \__,_|_| |_|\___|_| |_\/   "
+echo "                                                |_|                               "
+echo "                                                                   by superkojiman"
+echo ""
+}
+
 function usage {
     echo "Usage: $0 -t targets.txt [-p tcp/udp/all] [-i interface] [-n nmap-options] [-h]"
     echo "       -h: Help"
@@ -10,18 +28,20 @@ function usage {
 }
 
 
+banner
+
 if [[ ! $(id -u) == 0 ]]; then
-    echo "[!] This script must be run as root"
+    echo -e "${RED}[!]${RESET} This script must be run as root"
     exit 1
 fi
 
 if [[ -z $(which nmap) ]]; then
-    echo "[!] Unable to find nmap. Install it and make sure it's in your PATH   environment"
+    echo -e "${RED}[!]${RESET} Unable to find nmap. Install it and make sure it's in your PATH   environment"
     exit 1
 fi
 
 if [[ -z $(which unicornscan) ]]; then
-    echo "[!] Unable to find unicornscan. Install it and make sure it's in your PATH environment"
+    echo -e "${RED}[!]${RESET} Unable to find unicornscan. Install it and make sure it's in your PATH environment"
     exit 1
 fi
 
@@ -59,11 +79,10 @@ if [[ ${proto} != "tcp" && ${proto} != "udp" && ${proto} != "all" ]]; then
     exit 1
 fi
 
-echo "[+] Protocol : ${proto}"
-echo "[+] Interface: ${iface}"
-echo "[+] Nmap opts: ${nmap_opt}"
-echo "[+] Targets  : ${targets}"
-
+echo -e "${BLUE}[+]${RESET} Protocol : ${proto}"
+echo -e "${BLUE}[+]${RESET} Interface: ${iface}"
+echo -e "${BLUE}[+]${RESET} Nmap opts: ${nmap_opt}"
+echo -e "${BLUE}[+]${RESET} Targets  : ${targets}"
 
 # backup any old scans before we start a new one
 mydir=$(dirname $0)
@@ -81,39 +100,40 @@ rm -rf "${mydir}/udir/"
 mkdir -p "${mydir}/udir/"
 
 while read ip; do
-    echo "[+] Scanning $ip for $proto ports..."
+    echo -e "${BLUE}[+]${RESET} Scanning $ip for $proto ports..."
 
     # unicornscan identifies all open TCP ports
     if [[ $proto == "tcp" || $proto == "all" ]]; then 
-        echo "[+] Obtaining all open TCP ports using unicornscan..."
-        echo "[+] unicornscan -i ${iface} -mT ${ip}:a -l ${mydir}/udir/${ip}-tcp.txt"
+        echo -e "${BLUE}[+]${RESET} Obtaining all open TCP ports using unicornscan..."
+        echo -e "${BLUE}[+]${RESET} unicornscan -i ${iface} -mT ${ip}:a -l ${mydir}/udir/${ip}-tcp.txt"
         unicornscan -i ${iface} -mT ${ip}:a -l ${mydir}/udir/${ip}-tcp.txt
         ports=$(cat "${mydir}/udir/${ip}-tcp.txt" | grep open | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',')
         if [[ ! -z $ports ]]; then 
             # nmap follows up
-            echo "[+] Ports for nmap to scan: $ports"
-            echo "[+] nmap -e ${iface} ${nmap_opt} -oX ${mydir}/ndir/${ip}-tcp.xml -oG ${mydir}/ndir/${ip}-tcp.grep -p ${ports} ${ip}"
+            echo -e "${GREEN}[*]${RESET} TCP ports for nmap to scan: $ports"
+            echo -e "${BLUE}[+]${RESET} nmap -e ${iface} ${nmap_opt} -oX ${mydir}/ndir/${ip}-tcp.xml -oG ${mydir}/ndir/${ip}-tcp.grep -p ${ports} ${ip}"
             nmap -e ${iface} ${nmap_opt} -oX ${mydir}/ndir/${ip}-tcp.xml -oG ${mydir}/ndir/${ip}-tcp.grep -p ${ports} ${ip}
         else
-            echo "[!] No TCP ports found"
+            echo -e "${RED}[!]${RESET} No TCP ports found"
         fi
     fi
 
     # unicornscan identifies all open UDP ports
     if [[ $proto == "udp" || $proto == "all" ]]; then  
-        echo "[+] Obtaining all open UDP ports using unicornscan..."
-        echo "[+] unicornscan -i ${iface} -mU ${ip}:a -l ${mydir}/udir/${ip}-udp.txt"
+        echo -e "${BLUE}[+]${RESET} Obtaining all open UDP ports using unicornscan..."
+        echo -e "${BLUE}[+]${RESET} unicornscan -i ${iface} -mU ${ip}:a -l ${mydir}/udir/${ip}-udp.txt"
         unicornscan -i ${iface} -mU ${ip}:a -l ${mydir}/udir/${ip}-udp.txt
         ports=$(cat "${mydir}/udir/${ip}-udp.txt" | grep open | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',')
         if [[ ! -z $ports ]]; then
             # nmap follows up
-            echo "[+] nmap -e ${iface} ${nmap_opt} -sU -oX ${mydir}/ndir/${ip}-udp.xml -oG ${mydir}/ndir/${ip}-udp.grep -p ${ports} ${ip}"
+            echo -e "${GREEN}[*]${RESET} UDP ports for nmap to scan: $ports"
+            echo -e "${BLUE}[+]${RESET} nmap -e ${iface} ${nmap_opt} -sU -oX ${mydir}/ndir/${ip}-udp.xml -oG ${mydir}/ndir/${ip}-udp.grep -p ${ports} ${ip}"
             nmap -e ${iface} ${nmap_opt} -sU -oX ${mydir}/ndir/${ip}-udp.xml -oG ${mydir}/ndir/${ip}-udp.grep -p ${ports} ${ip}
         else
-            echo "[!] No UDP ports found"
+            echo -e "${RED}[!]${RESET} No UDP ports found"
         fi
     fi
 done < ${targets}
 
-echo "[+] Scans completed"
+echo -e "${BLUE}[+]${RESET} Scans completed"
 
