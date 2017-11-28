@@ -20,7 +20,7 @@ echo ""
 }
 
 function usage {
-    echo "Usage: $0 [-t target IP | -f targets.txt] [-p tcp/udp/all] [-i interface] [-n nmap-options] [-h]"
+    echo "Usage: $0 [-t target IP | -f targets.txt] [-p tcp/udp/all] [-i interface] [-n nmap-options] [-l filepath] [-h]"
     echo "       -h: Help"
     echo "       -t: IP of target to scan (this or '-f' must be specified)."
     echo "       -f: File containing ip addresses to scan (one per line)."
