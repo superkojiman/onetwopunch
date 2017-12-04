@@ -15,7 +15,6 @@ echo "| (_) | | | |  __/ ᕦ(ò_óˇ)ᕤ | |_ \ V  V / (_) | | |_) | |_| | | | |
 echo " \___/|_| |_|\___|           \__| \_/\_/ \___/  | .__/ \__,_|_| |_|\___|_| |_\/   "
 echo "                                                |_|                               "
 echo "                                                                   by superkojiman"
-#									and select modifications by ERROR418
 echo ""
 }
 
