@@ -86,31 +86,31 @@ function build_scan {
         #I'm sure there is a much better way to do this, but I am not a programmer...
     ntcp=$nscan
     if [[ $output == *"n"* ]]; then
-        ntcp+=" -oN ${log_dir}/${ip}-tcp.nmap"
+        ntcp+=" -oN ${log_dir}/scans/${ip}-tcp.nmap"
     fi
     if [[ $output == *"x"* ]]; then
-        ntcp+=" -oX ${log_dir}/${ip}-tcp.xml"
+        ntcp+=" -oX ${log_dir}/scans${ip}-tcp.xml"
     fi
     if [[ $output == *"g"* ]]; then
-        ntcp+=" -oG ${log_dir}/${ip}-tcp.grep"
+        ntcp+=" -oG ${log_dir}/scans/${ip}-tcp.grep"
     fi
     if [[ $output == *"a"* ]]; then
-        ntcp+=" -oA ${log_dir}/${ip}-tcp"
+        ntcp+=" -oA ${log_dir}/scans/${ip}-tcp"
     fi
 
     #build nmap udp command with output options
     nudp=$nscan
     if [[ $output == *"n"* ]]; then
-        nudp+=" -oN ${log_dir}/${ip}-udp.nmap"
+        nudp+=" -oN ${log_dir}/scans/${ip}-udp.nmap"
     fi
     if [[ $output == *"x"* ]]; then
-        nudp+=" -oX ${log_dir}/${ip}-udp.xml"
+        nudp+=" -oX ${log_dir}/scans/${ip}-udp.xml"
     fi
     if [[ $output == *"g"* ]]; then
-        nudp+=" -oG ${log_dir}/${ip}-udp.grep"
+        nudp+=" -oG ${log_dir}/scans/${ip}-udp.grep"
     fi
     if [[ $output == *"a"* ]]; then
-        nudp+=" -oA ${log_dir}/${ip}-udp"
+        nudp+=" -oA ${log_dir}/scans/${ip}-udp"
     fi
 
 }
@@ -205,13 +205,15 @@ fi
 echo -e "${BLUE}[+]${RESET} Log dir: ${log_dir}"
 
 #backup any old scans
-if [[ -a "${log_dir}/*" ]]; then
-    mkdir -p "${log_dir}/backup/"
-    mv "${log_dir}/*.*" "${log_dir}/backup/$(date "+%Y%m%d-%H%M%S")/"
+if [[ -d ${log_dir}/scans ]]; then
+    echo -e "${BLUE}[+]${RESET} Backing up old scans."
+    mkdir -p "${log_dir}/backup-$(date "+%Y%m%d-%H%M")/"
+    mv "${log_dir}/scans/" "${log_dir}/backup-$(date "+%Y%m%d-%H%M")/"
 fi
 
-#create udir
+#create needed directories
 mkdir -p "${log_dir}/udir/"
+mkdir -p "${log_dir}/scans/"
 
 # if there are multiple targets (-f option)
 if [[ -n $targets ]]; then
@@ -224,7 +226,7 @@ elif [[ -n $target ]]; then
     build_scan
     scans
 else
-    echo "error dealing with the target/targets variables"
+    echo "${RED}[!]${RESET} Error dealing with the target/targets variables"
 fi
 
 echo -e "${BLUE}[+]${RESET} Scans completed"
