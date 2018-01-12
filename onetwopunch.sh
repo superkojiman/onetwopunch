@@ -76,6 +76,7 @@ function scans {
 function clean {
     echo -e "${BLUE}[+]${RESET} Cleaning up..."
     rm -rf $log_dir/udir
+    chmod -R o+w $log_dir		#let other users delete scans, it was annoying to have to sudo
     echo -e "${BLUE}[+]${RESET} Done cleaning!"
 }
 
@@ -144,7 +145,7 @@ nmap_opt=""
 target=""
 targets=""
 log_dir="${HOME}/.onetwopunch"
-
+output="n"
 
 while getopts "p:i:t:f:n:l:o:h" OPT; do
     case $OPT in
@@ -188,13 +189,25 @@ elif [[ -n $nmap_opt ]]; then
     nmap_opt=$(echo -${nmap_opt})
 fi
 
+#create a banner section for the output format
+if [[ $output == *","* ]]; then
+    banner_out=$(echo ${output} | sed 's/,/, /g')
+else
+    banner_out=$output
+fi
+
 # add subdirectory to log_dir and remove any trailing "/" characters
 log_dir=$(echo ${log_dir} | sed 's/\/$//')
 log_dir=$(echo "${log_dir}/onetwopunch")
 
-echo -e "${BLUE}[+]${RESET} Protocol : ${proto}"
-echo -e "${BLUE}[+]${RESET} Interface: ${iface}"
-echo -e "${BLUE}[+]${RESET} Nmap opts: ${nmap_opt}"
+
+###########################Scan Banner###############################
+
+echo -e "${BLUE}[+]${RESET} Protocol :	${proto}"
+echo -e "${BLUE}[+]${RESET} Interface:	${iface}"
+echo -e "${BLUE}[+]${RESET} Nmap opts:	${nmap_opt}"
+echo -e "${BLUE}[+]${RESET} Log dir:	${log_dir}"
+echo -e "${BLUE}[+]${RESET} Output:	${banner_out}"
 if [[ -n $targets ]]; then					#use this if a target file is specified
 	echo -e "${BLUE}[+]${RESET} Targets: ${targets}"
 fi
@@ -202,7 +215,8 @@ fi
 if [[ -n $target ]]; then					#use this if only one target is specified
 	echo -e "${BLUE}[+]${RESET} Target: ${target}"
 fi
-echo -e "${BLUE}[+]${RESET} Log dir: ${log_dir}"
+
+#########################End Scan Banner#############################
 
 #backup any old scans
 if [[ -d ${log_dir}/scans ]]; then
