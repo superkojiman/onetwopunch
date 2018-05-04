@@ -11,6 +11,7 @@ BLUE=$ESC"34m"
 #global variables for found ports
 TCP_PORTS=""
 UDP_PORTS=""
+HTTP_PORTS=""
 
 #global variables for options (set to defaults)
 proto="tcp"
@@ -20,6 +21,7 @@ target=""
 targets=""
 log_dir="${HOME}/.onetwopunch"
 output="n"
+web="0"
 
 
 
@@ -35,7 +37,7 @@ echo ""
 }
 
 function usage {
-    echo "Usage: $0 [-t target IP | -f targets.txt] [-p tcp/udp/all] [-i interface] [-n nmap-options] [-l filepath] [-o output types] [-h]"
+    echo "Usage: $0 [-t target IP | -f targets.txt] [-p tcp/udp/all] [-i interface] [-n nmap-options] [-l filepath] [-o output types] [-w] [-h]"
     echo "       -h: Help"
     echo "       -t: IP of target to scan (this or '-f' must be specified)."
     echo "       -f: File containing ip addresses to scan (one per line)."
@@ -48,6 +50,7 @@ function usage {
     echo "            x: XML output format."
     echo "            g: Grepable output format."
     echo "            a: All output formats."
+    echo "       -w: Send any identified HTTP ports to Nikto."
     echo ""
 }
 
@@ -105,6 +108,14 @@ function error_check {
         exit 1
     fi
 
+    #check for Nikto if a web scan is requested
+    if [[ $web == 1 ]]; then
+        if [[ -z $(which nikto) ]]; then
+            echo -e "${RED}[!]${RESET} Unable to find Nikto. Install it and make sure it's in your PATH environment"
+            exit 1
+        fi
+    fi
+
     #make sure a target is specified
     if [[ -z $targets && -z $target ]]; then
         echo "[!] No target file provided"
@@ -155,6 +166,7 @@ function trigger_scan {
         #only run Nmap scan if ports are found
 	if [[ $UDP_PORTS == "" ]]; then
             echo -e "${RED}[!]${RESET} No UDP ports found, skipping Nmap scan..."
+            echo ""
         else
             scan
         fi
@@ -166,18 +178,21 @@ function trigger_scan {
         #only run Nmap scan if ports are found
         if [[ $TCP_PORTS == "" ]]; then
             echo -e "${RED}[!]${RESET} No TCP ports found, skipping Nmap scan..."
+            echo ""
         else
             scan
         fi
 
     elif [[ $proto == "all" ]]; then
         get_udp
+        echo ""
         get_tcp
         echo ""
 
         #only run Nmap scan if ports are found
         if [[ $UDP_PORTS == "" && $TCP_PORTS == "" ]]; then
             echo -e "${RED}[!]${RESET} No UDP or TCP ports found, skipping Nmap scan..."
+            echo ""
         else
             scan
         fi
@@ -186,7 +201,15 @@ function trigger_scan {
         echo "${RED}[!]${RESET} Error triggering scans"
     fi
 
+    #if web scan is requested
+    if [[ $web == 1 ]]; then
+        web_scan
+    fi
+
 }
+
+
+
 
 #-------------- BEGIN SCANS --------------
 
@@ -215,14 +238,37 @@ function get_tcp {
     TCP_PORTS=$(cat "${log_dir}/tmp_dir/${ip}-tcp.txt" | grep open | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',' | sed 's/,$//')
     echo -e "${YELLOW}[-]${RESET}	TCP Ports: ${TCP_PORTS}"
 
+    #if a web scan is selected, get the ports (if any)
+    if [[ $web == 1 ]]; then
+        HTTP_PORTS=$(cat "${log_dir}/tmp_dir/${ip}-tcp.txt" | grep http | cut -d"[" -f2 | cut -d"]" -f1 | sed 's/ //g' | tr '\n' ',' | sed 's/,$//')
+        echo -e "${YELLOW}[-]${RESET}	HTTP Ports: ${HTTP_PORTS}"
+        echo ""
+    fi
+
 }
 
 #use nmap to scan found ports
 function scan {
     #set base nmap scan
-    nscan="nmap -e ${iface} ${nmap_opt} ${ip} -sU -sT -pT:${TCP_PORTS},U:${UDP_PORTS}"
+    nscan="nmap -e ${iface} ${nmap_opt} ${ip}"
 
-    #add output types
+    #ADD PROTOCOL SWITCH----------
+    #only UDP scan
+    if [[ $UDP_PORTS != "" && $TCP_PORTS == "" ]]; then
+        nscan+=" -sU -p ${UDP_PORTS}"
+    fi
+
+    #only TCP scan
+    if [[ $UDP_PORTS == "" && $TCP_PORTS != "" ]]; then
+        nscan+=" -sT -p ${TCP_PORTS}"
+    fi
+
+    #UDP and TCP scan
+    if [[ $UDP_PORTS != "" && $TCP_PORTS != "" ]]; then
+        nscan+=" -sU -sT -pT:${TCP_PORTS},U:${UDP_PORTS}"
+    fi
+
+    #ADD OUTPUT TYPES----------
     #add "normal" output
     if [[ $output == *"n"* ]]; then
         nscan+=" -oN ${log_dir}/scans/${ip}.nmap"
@@ -244,14 +290,44 @@ function scan {
     fi
 
     echo -e "${GREEN}[+]${RESET} ${nscan}"
+    echo ""
 
     $nscan > ${log_dir}/tmp_dir/tmp.txt
+
+    print
+
+}
+
+function web_scan {
+    if [[ $HTTP_PORTS == "" ]]; then
+        echo -e "${RED}[!]${RESET} No HTTP ports found, skipping Nikto scan..."
+    else
+        echo -e "${BLUE}[+]${RESET} Scanning HTTP ports with Nikto..."
+        echo -e "${GREEN}[+]${RESET} nikto -output ${log_dir}/scans/${ip}.html -h ${ip} -p ${HTTP_PORTS}"
+        echo ""
+
+        nikto -output ${log_dir}/scans/${ip}-nikto.html -ask no -h ${ip} -p ${HTTP_PORTS} > ${log_dir}/tmp_dir/nik_tmp.txt
+
+        while read line; do
+            echo "	${line}"
+        done <${log_dir}/tmp_dir/nik_tmp.txt
+        echo ""
+
+    fi
 
 }
 
 
 #-------------- END SCANS --------------
 
+#print results from scans
+function print {
+    while read line; do
+        echo "	${line}"
+    done <${log_dir}/tmp_dir/tmp.txt
+    echo ""
+
+}
 
 #remove tmp directory
 function clean {
@@ -259,15 +335,6 @@ function clean {
     rm -rf $log_dir/tmp_dir
     chmod -R o+w $log_dir				#let other users delete scans, it was annoying to have to sudo
     echo -e "${BLUE}[+]${RESET} Done cleaning!"
-    echo ""
-
-}
-
-#print results from scans
-function print {
-    while read line; do
-        echo "	${line}"
-    done <${log_dir}/tmp_dir/tmp.txt
     echo ""
 
 }
@@ -287,7 +354,7 @@ if [[ -z $1 ]]; then
 fi
 
 #process user options
-while getopts "p:i:t:f:n:l:o:h" OPT; do
+while getopts "p:i:t:f:n:l:o:w:h" OPT; do
     case $OPT in
         p) proto=${OPTARG};;
         i) iface=${OPTARG};;
@@ -296,6 +363,7 @@ while getopts "p:i:t:f:n:l:o:h" OPT; do
         n) nmap_opt=${OPTARG};;
         l) log_dir=${OPTARG};;
         o) output=${OPTARG};;
+        w) web=1;;
         h) usage; exit 0;;
         *) usage; exit 0;;
     esac
@@ -307,11 +375,12 @@ prep
 #split into single target (-t) and multiple targets (-f)
 if [[ -n $targets ]]; then
     #multiple targets are specified, repeat for each target
+    scan_banner
     while read ip; do
+        echo -e "${YELLOW}[-]${RESET} Currently scanning: ${ip}"
+	echo ""
         #do scan stuff
-        scan_banner
         trigger_scan
-        print
     done <${targets}
 
     echo -e "${BLUE}[+]${RESET} Scans completed"
@@ -328,7 +397,6 @@ elif [[ -n $target ]]; then
     trigger_scan
     echo -e "${BLUE}[+]${RESET} Scans completed"
     echo ""
-    print
     echo -e "${BLUE}[+]${RESET} Results saved to ${log_dir}"
     clean
 
